@@ -1,0 +1,51 @@
+name: Build frpc for iOS (arm64)
+
+on:
+  workflow_dispatch:
+    inputs:
+      ios_min_version:
+        description: "Minimum iOS deployment target"
+        required: false
+        default: "15.0"
+
+jobs:
+  build-ios-frpc:
+    runs-on: macos-latest
+    steps:
+      - name: Checkout frp source
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.23.x"
+          cache-dependency-path: go.sum
+
+      - name: Ensure embed dist placeholder exists
+        run: |
+          mkdir -p web/frpc/dist
+          touch web/frpc/dist/.keep
+
+      - name: Build frpc for ios/arm64
+        env:
+          CGO_ENABLED: "1"
+          GOOS: "ios"
+          GOARCH: "arm64"
+          SDKROOT: "$(xcrun --sdk iphoneos --show-sdk-path)"
+          CC: "$(xcrun --sdk iphoneos --find clang)"
+          CGO_CFLAGS: "-isysroot $(xcrun --sdk iphoneos --show-sdk-path) -miphoneos-version-min=${{ inputs.ios_min_version }}"
+          CGO_LDFLAGS: "-isysroot $(xcrun --sdk iphoneos --show-sdk-path) -miphoneos-version-min=${{ inputs.ios_min_version }}"
+        run: |
+          export SDKROOT="$(xcrun --sdk iphoneos --show-sdk-path)"
+          export CC="$(xcrun --sdk iphoneos --find clang)"
+          export CGO_CFLAGS="-isysroot ${SDKROOT} -miphoneos-version-min=${{ inputs.ios_min_version }}"
+          export CGO_LDFLAGS="-isysroot ${SDKROOT} -miphoneos-version-min=${{ inputs.ios_min_version }}"
+          go build -trimpath -ldflags="-s -w" -o frpc ./cmd/frpc
+          file frpc
+
+      - name: Upload frpc artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: frpc-ios-arm64
+          path: frpc
+          if-no-files-found: error
